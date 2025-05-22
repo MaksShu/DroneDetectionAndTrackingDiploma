@@ -1,4 +1,0 @@
-train: /kaggle/input/yolo-detection-dataset/YOLO Detection Dataset/train
-val: /kaggle/input/yolo-detection-dataset/YOLO Detection Dataset/test
-nc: 1 
-names: ["drone"]

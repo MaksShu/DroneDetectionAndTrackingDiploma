@@ -1,13 +1,44 @@
+<DroneMap>:
+    canvas.before:
+        Color:
+            rgba: 0, 0, 0, 0
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
 <VideoContainer@FloatLayout>:
     canvas.before:
         Color:
             rgba: 0.1, 0.1, 0.1, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+<VideoImage@Image>:
+    canvas.before:
+        Color:
+            rgba: 0, 0, 0, 0
+        Rectangle:
+            pos: self.pos
+            size: self.size
 
 <RoundedButton@Button>:
     background_normal: ''
-    size: '40dp', '40dp'
-    background_color: (0.2, 0.2, 0.2, 1)
+    size: '120dp', '120dp'
+    background_color: (0.3, 0.3, 0.3, 1)
     color: 1, 1, 1, 1
+    canvas.before:
+        Color:
+            rgba: self.background_color
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    canvas.after:
+        Color:
+            rgba: 0.4, 0.4, 0.4, 1
+        Line:
+            rectangle: (self.x, self.y, self.width, self.height)
+            width: 1.0
 
 <DroneCard@BoxLayout>:
     orientation: 'horizontal'
@@ -26,8 +57,8 @@
         id: image
         source: ''
         size_hint_x: 0.5
-        allow_stretch: True
-        keep_ratio: False
+        allow_stretch: False
+        keep_ratio: True
         canvas.before:
             StencilPush
             RoundedRectangle:
@@ -69,6 +100,11 @@
             text: 'Last detected at 12:30:15'
             font_size: '12sp'
             color: 0.5, 0.5, 0.5, 1
+        Label:
+            id: confidence
+            text: 'Avg. confidence: 0.00'
+            font_size: '12sp'
+            color: 0.5, 0.5, 0.5, 1
 
 <TimeHeader@BoxLayout>:
     size_hint_y: None
@@ -96,3 +132,19 @@
             pos: self.pos
             size: self.size
             radius: [15,]
+
+<ImageButton@Button>:
+    background_normal: ''
+    background_down: ''
+    background_color: (0, 0, 0, 0)
+    border: (0, 0, 0, 0)
+    size_hint: (None, None)
+    size: '64dp', '64dp'
+
+    canvas.before:
+        Color:
+            rgba: 1, 1, 1, 1
+        Rectangle:
+            source: self.background_normal
+            pos: self.pos
+            size: self.size

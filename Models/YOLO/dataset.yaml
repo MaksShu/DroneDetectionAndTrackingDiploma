@@ -1,7 +1,0 @@
-path: ../../../Datasets/Detection Dataset/
-
-train: train
-val: test
-
-names:
-  0: drone

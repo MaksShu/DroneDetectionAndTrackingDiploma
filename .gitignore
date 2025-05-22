@@ -158,19 +158,3 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 .idea/
-/Datasets/Raw datasets
-
-/Datasets/**/*.json
-/Datasets/**/*.jpg
-/Datasets/**/*.mp4
-/Datasets/Detection Dataset/yolo_labels
-/Datasets/Detection Dataset/test/labels
-/Datasets/Detection Dataset/train/labels
-/Datasets/YOLO Detection Dataset
-Datasets/Detection Dataset/test/labels.cache
-Datasets/Detection Dataset/train/labels.cache
-Datasets/YOLO Detection Dataset.zip
-/Models/RTDETR/runs
-/Models/YOLO/11m_pt_results/runs
-/Models/YOLO/v8s_pt_results/runs
-/Models/YOLO/validation
