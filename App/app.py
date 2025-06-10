@@ -9,7 +9,10 @@ from kivy.graphics import Color, Rectangle
 from kivy.core.window import Window
 from kivy.lang import Builder
 from plyer import filechooser
-from kivy.clock import Clock
+from kivy.uix.popup import Popup
+from kivy.uix.textinput import TextInput
+from kivy.uix.button import Button
+from kivy.uix.gridlayout import GridLayout
 import cv2
 import numpy as np
 
@@ -31,6 +34,7 @@ class DroneTrackingApp(App):
     """Main application class for drone detection and tracking."""
     
     current_time = StringProperty('')
+    current_fps = StringProperty('- FPS')
     icon = 'icons/icon.png'
 
     def __init__(self, **kwargs):
@@ -53,7 +57,7 @@ class DroneTrackingApp(App):
         """Build the application UI."""
         self.root = BoxLayout(orientation='horizontal', padding=20, spacing=20)
         self.root.bind(size=self.left_background)
-        
+
         with self.root.canvas.before:
             Color(0.1, 0.1, 0.1, 1)
             Rectangle(
@@ -252,7 +256,7 @@ class DroneTrackingApp(App):
 
         self.root.add_widget(right_panel)
 
-    def process_frame(self):
+    def process_frame(self, skip_frame=False):
         """Process a single frame from the video source."""
         if self.frame_source is None:
             return None
@@ -263,6 +267,9 @@ class DroneTrackingApp(App):
 
         current_timestamp = self.video_player.current_frame_index / self.video_player.fps
 
+        if skip_frame:
+            return frame
+
         detections = self.detector.detect(frame)
         if len(detections) > 0:
             tracked_objects = self.tracker.update(np.array(detections), frame)
@@ -272,10 +279,10 @@ class DroneTrackingApp(App):
                     continue
                 x1, y1, x2, y2, track_id, class_id, conf = det
                 track_id = int(track_id)
-                
+
                 if track_id not in self.result_repository.detections:
                     self.result_repository.save_drone_image(frame, x1, y1, x2, y2, track_id)
-                
+
                 self.result_repository.add_detection(
                     track_id=track_id,
                     bbox=np.array([x1, y1, x2, y2]),
@@ -289,11 +296,11 @@ class DroneTrackingApp(App):
                 pt2 = (int(x2), int(y2))
                 cv2.rectangle(frame, pt1, pt2, color, 2)
                 label = f'ID {track_id}'
-                cv2.putText(frame, label, (int(x1), int(y1) - 10),
-                           cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
+                cv2.putText(frame, label, (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
 
-            self.drone_panel.update_drones(self.result_repository.get_all_tracks())
-            self.drone_map.update_tracks(self.result_repository.get_all_tracks())
+            all_tracks = self.result_repository.get_all_tracks()
+            self.drone_panel.update_drones(all_tracks)
+            self.drone_map.update_tracks(all_tracks)
 
         return frame
 
@@ -308,27 +315,37 @@ class DroneTrackingApp(App):
 
         self.cleanup()
 
-        self.frame_source = VideoFileSource(selection[0])
-        
+        if isinstance(selection, list):
+            path = selection[0]
+            self.frame_source = VideoFileSource(path)
+            self.filename = os.path.basename(path)
+        elif isinstance(selection, str) and selection.lower().startswith(("http://", "https://")):
+            self.frame_source = URLVideoSource(selection)
+            self.filename = selection.split('/')[-1]
+        elif isinstance(selection, StreamSource):
+            self.frame_source = selection
+            self.filename = selection.url
+
         self.video_player.total_frames = self.frame_source.get_total_frames()
         self.slider.max = self.video_player.total_frames
         self.slider.value = 0
         self.slider.disabled = False
-        
+
         self.video_image.opacity = 1
         self.file_info_label.opacity = 1
-        
-        filename = os.path.basename(selection[0])
-        fps = self.frame_source.get_fps()
-        self.file_info_label.text = f'{filename} | {fps:.0f} FPS'
-        
+
+        self.video_fps = self.frame_source.get_fps()
+        self.file_info_label.text = f'{self.filename} | {self.video_fps:.0f} FPS | - FPS'
+
+        self.video_player.on_fps_update = self.update_fps
+
         self.video_player.start_playback(self.frame_source.get_fps())
-        
+
         self.drone_map.set_frame_size(
             int(self.frame_source.cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
             int(self.frame_source.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         )
-        
+
         if self.drone_map:
             self.drone_map.opacity = 1
             self.drone_map.set_visible(True)
@@ -337,9 +354,9 @@ class DroneTrackingApp(App):
         """Handle slider value changes."""
         if self.frame_source is None:
             return
-            
+
         self.current_time = seconds_to_time(value / self.video_player.fps)
-        
+
         if self.user_adjusting_slider:
             self.video_player.seek(int(value))
 
@@ -376,24 +393,116 @@ class DroneTrackingApp(App):
         self.tracker.reset()
         self.result_repository.cleanup()
         self.drone_panel.clear()
-        
+
         self.video_image.opacity = 0
         self.file_info_label.opacity = 0
         self.file_info_label.text = ''
-        
+
         if self.drone_map:
             self.drone_map.opacity = 0
             self.drone_map.clear()
 
     def open_url_input(self, instance):
         """Handle opening a video from URL."""
-        # TODO: Implement URL input dialog
-        pass
+        content = BoxLayout(orientation='vertical', spacing=10, padding=10)
+
+        url_input = TextInput(
+            hint_text='Paste video URL here',
+            multiline=False,
+            size_hint_y=None,
+            height='40dp'
+        )
+        content.add_widget(url_input)
+
+        buttons = BoxLayout(size_hint_y=None, height='40dp', spacing=10)
+        load_btn = Button(text='Load')
+        cancel_btn = Button(text='Cancel')
+        buttons.add_widget(load_btn)
+        buttons.add_widget(cancel_btn)
+        content.add_widget(buttons)
+
+        popup = Popup(
+            title='Open Video from URL',
+            content=content,
+            size_hint=(None, None),
+            size=('400dp', '200dp'),
+            auto_dismiss=False
+        )
+
+        load_btn.bind(on_release=lambda btn: (
+            self.load_video(url_input.text.strip()) if url_input.text.strip() else None,
+            popup.dismiss()
+        ))
+        cancel_btn.bind(on_release=lambda btn: popup.dismiss())
+
+        popup.open()
 
     def open_stream_input(self, instance):
-        """Handle opening a video stream."""
-        # TODO: Implement stream input dialog
-        pass
+        """Handle opening a video stream via popup dialog."""
+        form = GridLayout(cols=2, spacing=10, padding=10, size_hint_y=None)
+        form.bind(minimum_height=form.setter('height'))
+
+        form.add_widget(Label(text='RTSP URL:', size_hint_x=None, width=100))
+        self.url_input = TextInput(multiline=False, size_hint_y=None, height=30)
+        form.add_widget(self.url_input)
+
+        form.add_widget(Label(text='Username:', size_hint_x=None, width=100))
+        self.user_input = TextInput(multiline=False, size_hint_y=None, height=30)
+        form.add_widget(self.user_input)
+
+        form.add_widget(Label(text='Password:', size_hint_x=None, width=100))
+
+        self.pass_input = TextInput(password=True, multiline=False, size_hint_y=None, height=30)
+        form.add_widget(self.pass_input)
+
+        btn_layout = BoxLayout(size_hint_y=None, height=40, spacing=10, padding=(10,0))
+        btn_open = Button(text='Open', size_hint_x=0.5)
+        btn_cancel = Button(text='Cancel', size_hint_x=0.5)
+        btn_layout.add_widget(btn_open)
+        btn_layout.add_widget(btn_cancel)
+
+        content = BoxLayout(orientation='vertical')
+        content.add_widget(form)
+        content.add_widget(btn_layout)
+
+        self._stream_popup = Popup(
+            title='Open RTSP Stream',
+            content=content,
+            size_hint=(0.8, None),
+            height=280,
+        )
+
+        btn_open.bind(on_press=self._on_open_stream_confirm)
+        btn_cancel.bind(on_press=lambda btn: self._stream_popup.dismiss())
+
+        self._stream_popup.open()
+
+    def _on_open_stream_confirm(self, btn):
+        url = self.url_input.text.strip()
+        username = self.user_input.text.strip() or None
+        password = self.pass_input.text or None
+
+        self._stream_popup.dismiss()
+
+        if not url:
+            Popup(title='Error',
+                  content=Label(text='URL cannot be empty'),
+                  size_hint=(0.6, None), height=150).open()
+            return
+
+        try:
+            self.stream_source = StreamSource(
+                stream=url,
+                username=username,
+                password=password,
+            )
+
+            self.load_video(self.stream_source)
+
+        except ValueError as e:
+            Popup(title='Connection Error',
+                  content=Label(text=str(e)),
+                  size_hint=(0.6, None), height=150).open()
 
     def on_stop(self):
         """Called when the application is closing."""
@@ -430,22 +539,22 @@ class DroneTrackingApp(App):
         """Restart video playback from the beginning."""
         if self.frame_source is None:
             return
-            
+
         self.video_player.current_frame_index = 0
         self.slider.value = 0
         self.current_time = '00:00:00'
-        
+
         self.video_player.resume()
 
     def stop_and_show_buttons(self, instance):
         """Stop video playback and show input buttons."""
         if self.frame_source is None:
             return
-            
+
         self.video_player.pause()
-        
+
         self.cleanup()
-        
+
         self.slider.value = 0
         self.current_time = '00:00:00'
         self.play_button.text = '|>'
@@ -459,17 +568,19 @@ class DroneTrackingApp(App):
     def on_video_pause(self):
         """Handle video pause event."""
         self.play_button.text = '|>'
-        if self.drone_map:
-            self.drone_map.set_visible(True)
 
     def on_video_stop(self):
         """Handle video stop event."""
         self.play_button.text = '|>'
         self.slider.value = 0
         self.current_time = '00:00:00'
-        if self.drone_map:
-            self.drone_map.opacity = 0
-            self.drone_map.clear()
+
+    def update_fps(self, fps):
+        """Update the FPS display."""
+        if fps is None:
+            self.file_info_label.text = f'{self.filename} | {self.video_fps:.0f} FPS | - FPS'
+        else:
+            self.file_info_label.text = f'{self.filename} | {self.video_fps:.0f} FPS | {fps:.1f} FPS'
 
 
 if __name__ == '__main__':

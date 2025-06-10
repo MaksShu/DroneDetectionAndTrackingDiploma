@@ -52,11 +52,4 @@ class YOLOv12Detector:
         if isinstance(results, list):
             results = results[0]
 
-        detections = []
-        for box in results.boxes:
-            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-            conf = box.conf[0].cpu().numpy()
-            class_id = box.cls[0].cpu().numpy()
-            detections.append([x1, y1, x2, y2, conf, class_id])
-
-        return detections
+        return results.boxes.data.cpu().numpy()
